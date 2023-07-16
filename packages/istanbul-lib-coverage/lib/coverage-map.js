@@ -35,12 +35,14 @@ class CoverageMap {
      * @param {Object} [obj=undefined] obj A coverage map from which to initialize this
      * map's contents. This can be the raw global coverage object.
      */
-    constructor(obj) {
+    constructor(obj, gitDiffParser, linesMap) {
         if (obj instanceof CoverageMap) {
-            this.data = obj.data;
+          this.data = obj.data;
         } else {
-            this.data = loadMap(obj);
+          this.data = loadMap(obj);
         }
+        this.diffParser = gitDiffParser || null
+        this.linesMap = linesMap || null
     }
 
     /**
@@ -106,8 +108,18 @@ class CoverageMap {
      * @param {FileCoverage} fc the file coverage to add
      */
     addFileCoverage(fc) {
-        const cov = new FileCoverage(fc);
-        const { path } = cov;
+      const cov = new FileCoverage(fc);
+      cov.diffParser = this.diffParser
+      cov.linesMap = this.linesMap
+      const { path } = cov;
+      if (this.diffParser) {
+        const isChangeFile = this.diffParser.some(d => path.includes(d.newPath))
+        console.log('isChangeFile', isChangeFile);
+        if (!isChangeFile) {
+          return
+        }
+        // path.includes()
+      }
         if (this.data[path]) {
             this.data[path].merge(cov);
         } else {
@@ -121,6 +133,7 @@ class CoverageMap {
      */
     getCoverageSummary() {
         const ret = new CoverageSummary();
+        console.log('getCoverageSummary1', this.data);
         Object.values(this.data).forEach(fc => {
             ret.merge(fc.toSummary());
         });

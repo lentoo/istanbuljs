@@ -35,11 +35,11 @@ module.exports = {
      *  as the one passed to the CoverageMap constructor.
      * @returns {CoverageMap}
      */
-    createCoverageMap(obj) {
+    createCoverageMap(obj, gitDiffParser, linesMap) {
         if (obj && obj instanceof CoverageMap) {
             return obj;
         }
-        return new CoverageMap(obj);
+        return new CoverageMap(obj, gitDiffParser, linesMap);
     },
     /**
      * creates a FileCoverage object

@@ -253,12 +253,57 @@ class FileCoverage {
         }
     }
 
-    computeSimpleTotals(property) {
+    computeSimpleTotals(property, propertyName) {
         let stats = this[property];
-
         if (typeof stats === 'function') {
-            stats = stats.call(this);
+          stats = stats.call(this);
         }
+        const incrementStatementMap = this.incrementStatementMap || {}
+        const incrementCovered = this.incrementCovered || {}
+        // console.log(this.diffParser);
+        if (this.linesMap) {
+          const key = Object.keys(this.linesMap).find(p => this.path.includes(p))
+          if (key) {
+            const lines = this.linesMap[key]
+            if (propertyName) {
+              const statsMap = this[propertyName]
+              Object.values(statsMap).forEach((location, k) => {
+                let start,end
+                if (propertyName === 'fnMap') {
+                  start = location.loc.start
+                  end = location.loc.end
+                } else {
+                  start = location.start,
+                  end = location.end
+                }
+                for (let i = 0; i <= lines.length; i++) {
+                  // 判断这个语句中是否有新增的行
+                  if (lines[i] >= start.line && lines[i] <= end.line) {
+                    // 如果有则装进incrementStatementMap
+                    incrementStatementMap[k] = location;
+                    break;
+                  }
+                }
+              })
+            }
+          }
+        }
+        // 获取新增语句的index
+        const incrementStatementNum = Object.keys(incrementStatementMap);
+
+        // 获取被覆盖的新增语句
+        Object.entries(stats).forEach(([k, v]) => {
+          // 判断语句是否被覆盖
+          if (v > 0) {
+            // 判断被覆盖的语句是否属于新增语句
+            if (incrementStatementNum.indexOf(k) > -1) {
+              incrementStatementMap[k].covered = true;
+              incrementCovered[k] = v;
+            }
+          }
+        });
+        this.incrementStatementMap = incrementStatementMap
+        this.incrementCovered = incrementCovered
 
         const ret = {
             total: Object.keys(stats).length,

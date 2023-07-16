@@ -29,6 +29,34 @@ function customEscape(text) {
         .replace(RE_gt, '>');
 }
 
+function annotateIncrementStatements(fileCoverage, structuredText) {
+  // console.log('annotateIncrementStatements');
+  const { incrementStatementMap, incrementCovered } = fileCoverage
+  if (incrementStatementMap && incrementCovered) {
+    Object.entries(incrementStatementMap).forEach(([k, location]) => {
+      const { start, end, covered } = location;
+      const { line: startLine } = start;
+      const { line: endLine } = end;
+      structuredText.forEach(text => {
+        // 前端项目中一个语句可能包括多行，这里让报告更清晰，将新增语句中的每行都标记上
+        if (text.line <= endLine && text.line >= startLine) {
+          // 标记为新增
+          text.addStatement = 'yes';
+          // 计算是第几个新增语句
+          text.addStatementNum = Object.keys(incrementStatementMap).indexOf(k) + 1;
+          // 判断是否覆盖
+          if (covered) {
+            text.addStatementCovered = 'yes';
+          } else {
+            text.addStatementCovered = 'no';
+          }
+        }
+      });
+    })
+
+  }
+}
+
 function annotateLines(fileCoverage, structuredText) {
     const lineStats = fileCoverage.getLineCoverage();
     if (!lineStats) {
@@ -245,8 +273,9 @@ function annotateBranches(fileCoverage, structuredText) {
 async function annotateSourceCode(fileCoverage, sourceStore) {
     let codeArray;
     let lineCoverageArray;
+    // console.log('fileCoverage', fileCoverage);
     try {
-        const sourceText = await sourceStore.getSource(fileCoverage.path);
+      const sourceText = await sourceStore.getSource(fileCoverage.path);
         const code = sourceText.split(/(?:\r?\n)|\r/);
         let count = 0;
         const structured = code.map(str => {
@@ -263,12 +292,14 @@ async function annotateSourceCode(fileCoverage, sourceStore) {
             covered: null,
             text: new InsertionText('')
         });
+
         annotateLines(fileCoverage, structured);
         //note: order is important, since statements typically result in spanning the whole line and doing branches late
         //causes mismatched tags
         annotateBranches(fileCoverage, structured);
         annotateFunctions(fileCoverage, structured);
         annotateStatements(fileCoverage, structured);
+        annotateIncrementStatements(fileCoverage, structured)
         structured.shift();
 
         codeArray = structured.map(
@@ -283,9 +314,11 @@ async function annotateSourceCode(fileCoverage, sourceStore) {
         return {
             annotatedCode: codeArray,
             lineCoverage: lineCoverageArray,
-            maxLines: structured.length
+            maxLines: structured.length,
+            structured: structured
         };
     } catch (ex) {
+      console.log(ex);
         codeArray = [ex.message];
         lineCoverageArray = [{ covered: 'no', hits: 0 }];
         String(ex.stack || '')
@@ -297,7 +330,7 @@ async function annotateSourceCode(fileCoverage, sourceStore) {
         return {
             annotatedCode: codeArray,
             lineCoverage: lineCoverageArray,
-            maxLines: codeArray.length
+            maxLines: codeArray.length,
         };
     }
 }

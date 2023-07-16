@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const html = require('html-escaper');
-const { ReportBase } = require('istanbul-lib-report');
+const { ReportBase } = require('../../../istanbul-lib-report');
 const annotator = require('./annotator');
 
 function htmlHead(details) {
@@ -29,7 +29,7 @@ function htmlHead(details) {
     `;
 }
 
-function headerTemplate(details) {
+function headerTemplate(details,annotatorData) {
     function metricsTemplate({ pct, covered, total }, kind) {
         return `
             <div class='fl pad1y space-right2'>
@@ -90,6 +90,7 @@ ${htmlHead(details)}
             </div>
         </template>
     </div>
+    ${incrementTemplate(annotatorData)}
     <div class='status-line ${details.reportClass}'></div>
     `;
 }
@@ -122,7 +123,6 @@ function detailTemplate(data) {
         `<a name='L${num}'></a><a href='#L${num}'>${num}</a>`;
     const lineCount = line =>
         `<span class="cline-any cline-${line.covered}">${line.hits}</span>`;
-
     /* This is rendered in a `<pre>`, need control of all whitespace. */
     return [
         '<tr>',
@@ -137,6 +137,20 @@ function detailTemplate(data) {
         )}</pre></td>`,
         '</tr>'
     ].join('');
+}
+
+function incrementTemplate(data) {
+  if (!data || !data.structured) return ''
+  const statementAdd = struct => {
+    const statementCoveredNum = struct.filter(s => s.addStatementCovered === 'yes').length
+    const statementUnCoveredNum = struct.filter(s => s.addStatementCovered === 'no').length
+    return `
+      <span style="" class="cline-any cline-addStatement-yes">已覆盖新增语句 <span class="strong">${statementCoveredNum}</span></span>
+      <span style="margin-left: 20px;" class="cline-any cline-addStatement">未覆盖新增语句  <span class="strong">${statementUnCoveredNum}</span></span>
+    `
+  }
+
+  return statementAdd(data.structured)
 }
 const summaryTableHeader = [
     '<div class="pad1">',
@@ -355,11 +369,10 @@ class HtmlReport extends ReportBase {
     }
 
     onSummary(node, context) {
-        const linkMapper = this.linkMapper;
-        const templateData = this.getTemplateData();
-        const children = node.getChildren();
-        const skipEmpty = this.skipEmpty;
-
+      const linkMapper = this.linkMapper;
+      const templateData = this.getTemplateData();
+      const children = node.getChildren();
+      const skipEmpty = this.skipEmpty;
         this.fillTemplate(node, templateData, context);
         const cw = this.getWriter(context).writeFile(linkMapper.getPath(node));
         cw.write(headerTemplate(templateData));
@@ -407,11 +420,12 @@ class HtmlReport extends ReportBase {
         const linkMapper = this.linkMapper;
         const templateData = this.getTemplateData();
 
+        const annotatorData = await annotator(node.getFileCoverage(), context)
         this.fillTemplate(node, templateData, context);
         const cw = this.getWriter(context).writeFile(linkMapper.getPath(node));
-        cw.write(headerTemplate(templateData));
+        cw.write(headerTemplate(templateData, annotatorData));
         cw.write('<pre><table class="coverage">\n');
-        cw.write(detailTemplate(await annotator(node.getFileCoverage(), context)));
+        cw.write(detailTemplate(annotatorData));
         cw.write('</table></pre>\n');
         cw.write(footerTemplate(templateData));
         cw.close();
